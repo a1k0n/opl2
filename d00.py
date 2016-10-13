@@ -1,5 +1,6 @@
 import sys
 import struct
+import json
 
 notename = [
     'C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-']
@@ -88,11 +89,22 @@ def ReadD00(f):
         # print 'seq %x' % n, ' '.join(["%04x" % w for w in seq])
     print maxinst + 1, 'instruments'
 
+    instrs = []
     for i in range(maxinst+1):
         offset = 16*i + instrument
-        print i, ' '.join(["%02x" % ord(x) for x in f[offset:offset+16]])
+        instr = [ord(x) for x in f[offset:offset+16]]
+        instrs.append(instr)
+        print i, ' '.join(["%02x" % x for x in instr])
 
-    print map(hex, ptrs)
+    # export song as json
+    jsonSong = {
+        "arrangement": arrs,
+        "sequences": seqs,
+        "instruments": instrs
+    }
+
+    open('song.js', 'w').write("song=" + json.dumps(jsonSong))
+
 
 
 ReadD00(open(sys.argv[1]))
