@@ -6,7 +6,7 @@ var audioctx, jsNode, gainNode;
 var expTbl;
 var logSinTbl;
 
-var sampleRate_ = 48000;
+var sampleRate_ = 44100;
 
 var notenames = [
   'C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
@@ -60,7 +60,8 @@ function Operator() {
   this.phase = 0;  // phase, float, [0..1024)
   this.phaseIncr = 0;  // phase increment per sample
   this.feedback = 0;
-  this.lastSample = 0;
+  this.lastSample1 = 0;
+  this.lastSample0 = 0;
 }
 
 // Generate output wave into out (Int32Array), attenuated per-sample by vol (in
@@ -153,7 +154,8 @@ Operator.prototype.genModulatorWave = function(vol, numSamples, out) {
 
   var p = this.phase;
   var dp = this.phaseIncr;
-  var w = this.lastSample;  // w = last waveform output sample
+  var w1 = this.lastSample1;
+  var w = this.lastSample0;  // w = last waveform output sample
   var feedbackShift = 31;  // shift feedback down 31 bits (to 0)...
   if (this.feedback > 0) {  // ...unless we have a feedback set
     feedbackShift = 9 - this.feedback;
@@ -165,39 +167,45 @@ Operator.prototype.genModulatorWave = function(vol, numSamples, out) {
 
   if (this.waveform == 0) {  // sine wave: ^v^v
     for (var i = 0; i < numSamples; i++) {
-      var m = p + (w >> feedbackShift);  // m = modulated phase
+      var m = p + ((w + w1) >> feedbackShift);  // m = modulated phase
+      w1 = w;
       var l = logSinTbl[m & 511] + vol[i];  // l = -log(sin(p)) - log(volume)
-      var w = expTbl[l & 0xff] >> (l >> 8);  // table-based exponentiation: w = 4096 * 2^(-l/256)
+      w = expTbl[l & 0xff] >> (l >> 8);  // table-based exponentiation: w = 4096 * 2^(-l/256)
       if (m & 512) w = -w;  // negative part of sin wave
       p += dp;  // phase increment
       out[i] = w;
     }
   } else if (this.waveform == 1) {  // chopped sine wave: ^-^-
     for (var i = 0; i < numSamples; i++) {
-      var w = 0;
-      var m = p + (w >> feedbackShift);
+      var m = p + ((w + w1) >> feedbackShift);
+      w1 = w;
       if (m & 512) {
         var l = logSinTbl[m & 511] + vol[i];
         w = expTbl[l & 0xff] >> (l >> 8);
+      } else {
+        w = 0;
       }
       p += dp;
       out[i] = w;
     }
   } else if (this.waveform == 2) {  // abs sine wave: ^^^^
     for (var i = 0; i < numSamples; i++) {
-      var m = p + (w >> feedbackShift);
+      var m = p + ((w + w1) >> feedbackShift);
+      w1 = w;
       var l = logSinTbl[m & 511] + vol[i];
-      var w = expTbl[l & 0xff] >> (l >> 8);
+      w = expTbl[l & 0xff] >> (l >> 8);
       p += dp;
       out[i] = w;
     }
   } else if (this.waveform == 3) {  // chopped half sine wave: ////
     for (var i = 0; i < numSamples; i++) {
-      var w = 0;
-      var m = p + (w >> feedbackShift);
+      var m = p + ((w + w1) >> feedbackShift);
+      w1 = w;
       if (m & 256) {
         var l = logSinTbl[m & 255] + vol[i];
         w = expTbl[l & 0xff] >> (l >> 8);
+      } else {
+        w = 0;
       }
       p += dp;
       out[i] = w;
@@ -205,7 +213,8 @@ Operator.prototype.genModulatorWave = function(vol, numSamples, out) {
   }
 
   this.phase = p % 1024.0;
-  this.lastSample = w;
+  this.lastSample1 = w1;
+  this.lastSample0 = w;
 }
 
 // Generate ADSR (attack, decay, sustain, release) envelopes
@@ -236,12 +245,12 @@ Envelope.prototype.setADSR = function(att, dec, sus, rel) {
   // so dt * (282624 >> att) = 255
   // dt = 255 / (282624 >> att)
   //    = (255 << att) / 282624
-  this.attackInc = (255 << att) / 282624;
+  this.attackInc = (255 << att) / (4*282624);
 
   // decay and release seem to use these linear rates
-  this.decayInc = (1 << dec) / 256.0;  // ???
-  this.releaseInc = (1 << rel) / 256.0;
-  this.sustainLevel = sus << 4;  // this must be scaled by some factor. *shrug*
+  this.decayInc = (1 << dec) / 512.0;  // ???
+  this.releaseInc = (1 << rel) / 512.0;
+  this.sustainLevel = sus << 3;  // this must be scaled by some factor. *shrug*
   // sustain level 0 is full volume
 }
 
@@ -321,9 +330,17 @@ function Channel(num) {
 // Set up channel according to D00 player instrument parameters
 // (this will be refactored later into a separate player, no doubt)
 Channel.prototype.setD00Instrument = function(data) {
-  //  0  1  2  3  4    5  6  7  8  9   10
-  // f9 15 00 21 01 | ff 01 08 00 02 | 02 | 00 00 00 00 00
-  // AD SR CL CM WF | AD SR ML MM WF | FC | FT HR SR XX XX
+  //    0  1  2  3  4    5  6  7  8  9   10
+  // 0 ff ff 3f 20 00 | ff ff 3f 20 00 | 00 | 00 00 00 00 00
+  // 1 96 14 00 21 01 | 6f 33 00 00 02 | 00 | 00 00 00 00 00
+  // 2 ff 36 00 21 00 | ff 01 00 02 00 | 0c | 00 00 02 00 00
+  // 3 cf 05 40 21 00 | f4 36 0f 20 02 | 0a | 00 00 00 00 00
+  // 4 aa 24 00 21 01 | ff 04 0a 21 00 | 06 | 00 00 00 00 00
+  // 5 f9 15 00 21 01 | ff 01 08 00 02 | 02 | 00 00 00 00 00
+  // 6 ff 26 00 20 00 | f7 64 10 21 01 | 08 | 00 00 00 00 00
+  // 7 cf 05 46 61 00 | ff 05 10 41 00 | 00 | 00 00 00 00 00
+  // 8 ff 06 00 01 00 | f4 36 0f 01 00 | 00 | 00 00 00 00 00
+  //   AD SR CL CM WF | AD SR ML MM WF | FC | FT HR SR XX XX
   // -- carrier ---   --modulator --
   // CL: carrier level 00-3F; high 2 bits are keyboard scale level
   // CM: carrier multiple: TVEK|MLT --
@@ -340,11 +357,12 @@ Channel.prototype.setD00Instrument = function(data) {
 
   this.cenv.setADSR(data[0] >> 4, data[0] & 0x0f, data[1] >> 4, data[1] & 0x0f);
   this.menv.setADSR(data[5] >> 4, data[5] & 0x0f, data[6] >> 4, data[6] & 0x0f);
-  this.clevel = (data[2] & 0x3f) << 2;  // unsure about this shift
-  this.mlevel = (data[7] & 0x3f) << 2;
+  this.clevel = (data[2] & 0x3f) << 4;  // unsure about this shift
+  this.mlevel = (data[7] & 0x3f) << 4;
   // TODO: KSL data[2/7] >> 6
   this.cmul = freqMulTbl[data[3] & 0x0f];
   this.mmul = freqMulTbl[data[8] & 0x0f];
+  // console.log("instrument", data, 'cmul', this.cmul, 'mmul', this.mmul);
   // TODO: tremolo data[3/8] & 0x80
   // TODO: vibrato data[3/8] & 0x40
   this.cenv.sustainMode = !!(data[3] & 0x20);
@@ -358,7 +376,7 @@ Channel.prototype.setD00Instrument = function(data) {
 
 Channel.prototype.playD00Note = function(note, retrig) {
   // adjust increments for local playback sampling rate sampleRate_
-  var f_scale = sampleRate_ * 288 / 14313180.0;
+  var f_scale = 14313180.0 / (288 * sampleRate_);
   this.carrier.phaseIncr = d00IncrTable[note] * this.cmul * f_scale;
   this.modulator.phaseIncr = d00IncrTable[note] * this.mmul * f_scale;
   if (retrig) {
@@ -373,7 +391,7 @@ Channel.prototype.releaseNote = function() {
 }
 
 Channel.prototype.setLevel = function(level) {
-  this.level = level << 2;
+  this.level = level << 4;
 }
 
 // generation requires two scratch buffers at least as big as numSamples
@@ -393,7 +411,7 @@ Channel.prototype.generate = function(numSamples, out, scratch1, scratch2) {
 
 function D00Sequencer(arrangement, song) {
   this.arrangement = arrangement;
-  this.speed = arrangement[0];  // first arrangement entry is speed
+  this.speed = 2;  // arrangement[0];  // first arrangement entry is speed
   this.transpose = 0;
   this.arrOffset = 1;  // skip speed entry
 
@@ -403,6 +421,9 @@ function D00Sequencer(arrangement, song) {
   this.effect = 0;
   this.tick = 0;
   this.repeatCount = 0;
+
+  this.displayEff = "    ";
+  this.displayNote = "---";
 }
 
 // get next sequence in arrangement
@@ -416,7 +437,7 @@ D00Sequencer.prototype.nextSeq = function(song, channel) {
       this.arrOffset--;  // hang here forever
       return;
     } else if (e == 0xffff) {
-      this.arrOffset = 1;  // loop back to beginning
+      this.arrOffset = 1 + this.arrangement[this.arrOffset];  // loop back to beginning
     } else if (e >= 0x8000) {
       this.transpose = e & 0xff;
     } else {
@@ -431,7 +452,7 @@ D00Sequencer.prototype.nextRow = function(song, channel) {
     return;
   }
   if (this.repeatCount > 0) {
-    // console.log("---");
+    this.displayNote = "---";
     this.repeatCount--;
     return;
   }
@@ -445,8 +466,10 @@ D00Sequencer.prototype.nextRow = function(song, channel) {
     var data = e & 0xff;
     // console.log(this.seqPtr, e, eff, data);
     if (eff == 0x09) {  // change level
-      console.log("setLevel", channel.num, data);
       channel.setLevel(data);
+    } else if (eff == 0x0b) {  // spfx?
+      // hack, spfx not supported but at least we can use the instrument
+      channel.setD00Instrument(song.instruments[song.spfx[data][0]]);
     } else if (eff == 0x0c) {  // change instrument?
       // console.log('instrument', channel.num, data);
       channel.setD00Instrument(song.instruments[data]);
@@ -457,10 +480,10 @@ D00Sequencer.prototype.nextRow = function(song, channel) {
       this.repeatCount = repeat;
       if (note == 0) {
         channel.releaseNote();
-        // console.log("^^^");
+        this.displayNote = "^^^";
       } else if (note < 96) {
         channel.playD00Note(note + this.transpose, retrig);
-        // console.log('note ' + note, notenames[note % 12] + 0|(note / 12));
+        this.displayNote = notenames[note % 12] + ""+(0|(note / 12));
       }
       return;
     }
@@ -469,14 +492,17 @@ D00Sequencer.prototype.nextRow = function(song, channel) {
 
 // update to next tick in row
 D00Sequencer.prototype.nextTick = function(song, channel) {
+  var newRow = false;
   if (this.tick == 0) {
     this.nextRow(song, channel);
+    newRow = true;
   }
   this.tick++;
   if (this.tick > this.speed) {
     this.tick = 0;
   }
   // TODO: effects!
+  return newRow;
 }
 
 function D00Player(song) {
@@ -492,10 +518,27 @@ function D00Player(song) {
 }
 
 D00Player.prototype.nextTick = function() {
+  var newRow = false;
   for (var i = 0; i < 9; i++) {
     // console.log("nextTick", i);
-    this.sequencers[i].nextTick(this.song, this.channels[i]);
+    if (this.sequencers[i].nextTick(this.song, this.channels[i])) {
+      newRow = true;
+    }
   }
+  return newRow;
+}
+
+var patternDisplay = [];
+D00Player.prototype.updateDisplay = function() {
+  rowDisplay = [];
+  for (var i = 0; i < 9; i++) {
+    rowDisplay.push(this.sequencers[i].displayNote);
+  }
+  patternDisplay.push(rowDisplay.join(' '));
+  while (patternDisplay.length > 16) {
+    patternDisplay.shift();
+  }
+  document.getElementById("b").innerHTML = patternDisplay.join("\n");
 }
 
 D00Player.prototype.generate = function(bufLength, dataL, dataR) {
@@ -509,7 +552,9 @@ D00Player.prototype.generate = function(bufLength, dataL, dataR) {
   var offset = 0;
   while (offset < bufLength) {
     if (this.tickOffset == 0) {
-      this.nextTick();
+      if (this.nextTick()) {
+        this.updateDisplay();
+      }
     }
     var samplesLeftInTick = samplesPerTick - this.tickOffset;
     if (samplesLeftInTick == 0) {
@@ -558,9 +603,9 @@ window.onload = function() {
     gainNode.gain.value = 0.1;  // master volume
   }
   if (audioctx.createScriptProcessor === undefined) {
-    jsNode = audioctx.createJavaScriptNode(16384, 0, 2);
+    jsNode = audioctx.createJavaScriptNode(1024, 0, 2);
   } else {
-    jsNode = audioctx.createScriptProcessor(16384, 0, 2);
+    jsNode = audioctx.createScriptProcessor(1024, 0, 2);
   }
   jsNode.onaudioprocess = audioCallback;
   jsNode.connect(gainNode);
@@ -578,7 +623,7 @@ window.onload = function() {
   }
 
   statusElem = document.getElementById("a");
-  statusElem.innerHTML = "load";
+  statusElem.innerHTML = "(((waves of warez)))\nplaying crooner.d00 by drax / vibrants";
 
   window.audioctx = audioctx;
   window.jsNode = jsNode;

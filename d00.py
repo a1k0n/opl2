@@ -7,13 +7,31 @@ notename = [
 
 
 def ReadWords(f, offs):
+    ''' read array of words at offset offs terminated by 0xffff '''
+    arr = []
+    while True:
+        x, = struct.unpack("H", f[offs:offs+2])
+        offs += 2
+        arr.append(x)
+        if x == 0xffff:
+            break
+    return arr
+
+
+def ReadArrangementWords(f, offs):
     ''' read array of words at offset offs terminated by 0xffff or 0xfffe '''
     arr = []
     while True:
         x, = struct.unpack("H", f[offs:offs+2])
         offs += 2
         arr.append(x)
-        if x >= 0xfffe:
+        if x == 0xfffe:
+            break
+        if x == 0xffff:
+            # read one more word for the loop point
+            x, = struct.unpack("H", f[offs:offs+2])
+            offs += 2
+            arr.append(x)
             break
     return arr
 
@@ -51,7 +69,7 @@ def ReadD00(f):
     ptrs = struct.unpack("HHHHH", f[0x6b:0x75])
     arrangement, sequence, instrument, desc, spfx = ptrs
     arrs = struct.unpack("HHHHHHHHH", f[arrangement:arrangement+18])
-    arrs = [ReadWords(f, arr) for arr in arrs]
+    arrs = [ReadArrangementWords(f, arr) for arr in arrs]
 
     # show arrangement
     print 'song arrangement:'
@@ -77,18 +95,30 @@ def ReadD00(f):
 
     seqs = []
     maxinst = 0
+    maxspfx = -1
     for n in range(maxseq+1):
         offset = sequence + 2*n
         offset, = struct.unpack("H", f[offset:offset+2])
-        seq = ReadWords(f, offset)[:-1]  # discard the 0xffff end marker
+        seq = ReadWords(f, offset)  # discard the 0xffff end marker
         seqs.append(seq)
         print '-- sequence %x' % n
         DumpSeq(seq)
         # filter for instrument commands
-        maxinst = max([0] + [x & 0x3ff for x in seq if (x & 0xf000) == 0xc000])
+        print [hex(x & 0x3ff) for x in seq if (x & 0xf000) == 0xb000]
+        maxspfx = max([maxspfx] + [x & 0x3ff for x in seq if (x & 0xf000) == 0xb000])
+        maxinst = max([maxinst] + [x & 0x3ff for x in seq if (x & 0xf000) == 0xc000])
         # print 'seq %x' % n, ' '.join(["%04x" % w for w in seq])
-    print maxinst + 1, 'instruments'
 
+    print maxspfx + 1, 'spfx'
+    spfxs = []
+    for i in range(maxspfx+1):
+        offset = 8*i + spfx
+        fx = [ord(x) for x in f[offset:offset+8]]
+        maxinst = max(maxinst, fx[0])
+        spfxs.append(fx)
+        print i, ' '.join(["%02x" % x for x in fx])
+
+    print maxinst + 1, 'instruments'
     instrs = []
     for i in range(maxinst+1):
         offset = 16*i + instrument
@@ -100,11 +130,11 @@ def ReadD00(f):
     jsonSong = {
         "arrangement": arrs,
         "sequences": seqs,
-        "instruments": instrs
+        "instruments": instrs,
+        "spfx": spfxs
     }
 
     open('song.js', 'w').write("song=" + json.dumps(jsonSong))
-
 
 
 ReadD00(open(sys.argv[1]))
