@@ -248,8 +248,8 @@ Envelope.prototype.setADSR = function(att, dec, sus, rel) {
   this.attackInc = (255 << att) / (4*282624);
 
   // decay and release seem to use these linear rates
-  this.decayInc = (1 << dec) / 512.0;  // ???
-  this.releaseInc = (1 << rel) / 512.0;
+  this.decayInc = (1 << dec) / 768.0;  // ???
+  this.releaseInc = (1 << rel) / 768.0;
   this.sustainLevel = sus << 3;  // this must be scaled by some factor. *shrug*
   // sustain level 0 is full volume
 }
@@ -357,8 +357,8 @@ Channel.prototype.setD00Instrument = function(data) {
 
   this.cenv.setADSR(data[0] >> 4, data[0] & 0x0f, data[1] >> 4, data[1] & 0x0f);
   this.menv.setADSR(data[5] >> 4, data[5] & 0x0f, data[6] >> 4, data[6] & 0x0f);
-  this.clevel = (data[2] & 0x3f) << 4;  // unsure about this shift
-  this.mlevel = (data[7] & 0x3f) << 4;
+  this.clevel = (data[2] & 0x3f) << 5;  // unsure about this shift
+  this.mlevel = (data[7] & 0x3f) << 5;
   // TODO: KSL data[2/7] >> 6
   this.cmul = freqMulTbl[data[3] & 0x0f];
   this.mmul = freqMulTbl[data[8] & 0x0f];
@@ -515,10 +515,21 @@ function D00Player(song) {
     this.channels[i] = new Channel(i);
     this.sequencers[i] = new D00Sequencer(song.arrangement[i], song)
   }
+  // one-note test
+  // this.channels[0].setD00Instrument(song.instruments[5]);
+  // this.channels[0].playD00Note(48);
 }
 
+// var f = 0;
 D00Player.prototype.nextTick = function() {
   var newRow = false;
+  /*
+  f++;
+  if (f == 40) {
+    this.channels[0].releaseNote();
+  }
+  return false;
+  */
   for (var i = 0; i < 9; i++) {
     // console.log("nextTick", i);
     if (this.sequencers[i].nextTick(this.song, this.channels[i])) {
