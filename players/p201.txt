@@ -1,0 +1,735 @@
+00000000  E9A606            jmp word 0x6a9
+00000003  4A                dec dx
+00000004  43                inc bx
+00000005  48                dec ax
+00000006  26026601          add ah,[es:bp+0x1]
+0000000A  0200              add al,[bx+si]
+0000000C  094164            or [bx+di+0x64],ax
+0000000F  4C                dec sp
+00000010  6962202020        imul sp,[bp+si+0x20],word 0x2020
+00000015  2020              and [bx+si],ah
+00000017  2020              and [bx+si],ah
+00000019  2020              and [bx+si],ah
+0000001B  2020              and [bx+si],ah
+0000001D  2020              and [bx+si],ah
+0000001F  2020              and [bx+si],ah
+00000021  2020              and [bx+si],ah
+00000023  2020              and [bx+si],ah
+00000025  2020              and [bx+si],ah
+00000027  2020              and [bx+si],ah
+00000029  2020              and [bx+si],ah
+0000002B  2020              and [bx+si],ah
+0000002D  D506              aad 0x6
+0000002F  01E7              add di,sp
+00000031  06                push es
+00000032  010B              add [bp+di],cx
+00000034  07                pop es
+00000035  011D              add [di],bx
+00000037  07                pop es
+00000038  014107            add [bx+di+0x7],ax
+0000003B  0119              add [bx+di],bx
+0000003D  0800              or [bx+si],al
+0000003F  2208              and cl,[bx+si]
+00000041  00F4              add ah,dh
+00000043  0800              or [bx+si],al
+00000045  7707              ja 0x4e
+00000047  0000              add [bx+si],al
+00000049  0000              add [bx+si],al
+0000004B  0000              add [bx+si],al
+0000004D  0000              add [bx+si],al
+0000004F  0000              add [bx+si],al
+00000051  0000              add [bx+si],al
+00000053  0000              add [bx+si],al
+00000055  0000              add [bx+si],al
+00000057  0000              add [bx+si],al
+00000059  0000              add [bx+si],al
+0000005B  0000              add [bx+si],al
+0000005D  0000              add [bx+si],al
+0000005F  0000              add [bx+si],al
+00000061  0000              add [bx+si],al
+00000063  0000              add [bx+si],al
+00000065  0000              add [bx+si],al
+00000067  0000              add [bx+si],al
+00000069  0000              add [bx+si],al
+0000006B  0000              add [bx+si],al
+0000006D  0000              add [bx+si],al
+0000006F  0000              add [bx+si],al
+00000071  20506C            and [bx+si+0x6c],dl
+00000074  61                popaw
+00000075  7965              jns 0xdc
+00000077  7220              jc 0x99
+00000079  7630              jna 0xab
+0000007B  322E3031          xor ch,[0x3130]
+0000007F  2028              and [bx+si],ch
+00000081  43                inc bx
+00000082  2920              sub [bx+si],sp
+00000084  43                inc bx
+00000085  6F                outsw
+00000086  7079              jo 0x101
+00000088  7269              jc 0xf3
+0000008A  67687420          push word 0x2074
+0000008E  3139              xor [bx+di],di
+00000090  3932              cmp [bp+si],si
+00000092  204A65            and [bp+si+0x65],cl
+00000095  6E                outsb
+00000096  732D              jnc 0xc5
+00000098  43                inc bx
+00000099  687269            push word 0x6972
+0000009C  7374              jnc 0x112
+0000009E  69616E2048        imul sp,[bx+di+0x6e],word 0x4820
+000000A3  7575              jnz 0x11a
+000000A5  732E              jnc 0xd5
+000000A7  20
+
+cmd_3:  ; player update, once a tick?
+000000A8  8E06CF06          mov es,[0x6cf]
+000000AC  33DB              xor bx,bx
+000000AE  33F6              xor si,si
+update_channel:  ; seems to be the top of the main loop
+000000B0  80BF680001        cmp byte [bx+0x68],0x1  ; channel disabled?
+000000B5  7403              jz 0xba
+000000B7  E9E203            jmp word 0x49c
+000000BA  FE8F1008          dec byte [bx+0x810]  ; tick_count[ch]--;
+000000BE  7D08              jnl 0xc8           ; if (tick_count[ch] < 0)
+000000C0  8A871908          mov al,[bx+0x819]
+000000C4  88871008          mov [bx+0x810],al  ;   tick_count[ch] = speed[ch];
+
+; this part here makes absolutely no sense to me...
+; where do we actually read from the sequence?
+; is repeat_count actually the sequence length counter?
+000000C8  80BF100800        cmp byte [bx+0x810],0x0
+000000CD  750C              jnz 0xdb           ; if (tick_count[ch] == 0) {
+000000CF  FF8CE706          dec word [si+0x6e7]   ;   repeat_count[ch]--;
+000000D3  7D03              jnl 0xd8 ; -> 0x379   ;   if (repeat_count[ch] < 0) {
+000000D5  E98801            jmp word 0x260        ;     goto 0x260;
+000000D8  E99E02            jmp word 0x379        ;   } else {
+                                                  ;     goto 0x379;
+                                                  ;   }
+                                               ; }
+
+000000DB  80BF100801        cmp byte [bx+0x810],0x1  ; if (tick_count[ch] != 1)
+000000E0  75F6              jnz 0xd8  ; -> 0x379     ;   goto 0x379;
+000000E2  83BCE70600        cmp word [si+0x6e7],byte +0x0  ; if (repeat_count[ch] != 0)
+000000E7  75EF              jnz 0xd8  ; -> 0x379           ;   goto 0x379
+
+000000E9  C706CC060000      mov word [0x6cc],0x0  ; clear slide
+000000EF  8BAC1D07          mov bp,[si+0x71d]   ; arrangement offset
+000000F3  03AC2F07          add bp,[si+0x72f]   ; channel arrangement ptr
+000000F7  268B7E00          mov di,[es:bp+0x0]  ; di = ch->arrangement[offset]
+000000FB  83FFFE            cmp di,byte -0x2    ; 0xfffe -> end the channel
+000000FE  751D              jnz 0x11d
+
+; fffe_sequence
+00000100  C687680000        mov byte [bx+0x68],0x0  ; stop playing this channel, it's over
+00000105  C78441070000      mov word [si+0x741],0x0
+0000010B  C687220800        mov byte [bx+0x822],0x0
+00000110  C687100800        mov byte [bx+0x810],0x0
+00000115  C687920700        mov byte [bx+0x792],0x0
+0000011A  E90F03            jmp word 0x42c
+
+0000011D  83FFFF            cmp di,byte -0x1  ; ffff sequence, loop
+00000120  750C              jnz 0x12e
+; loop sequence
+00000122  268B4602          mov ax,[es:bp+0x2]  ; grab loop point
+00000126  D1E0              shl ax,1
+00000128  89841D07          mov [si+0x71d],ax   ; arrangement_ptr = loop_point*2
+0000012C  EBBB              jmp short 0xe9
+
+; regular sequence
+0000012E  8BD7              mov dx,di
+00000130  81E200F0          and dx,0xf000
+00000134  81FA0080          cmp dx,0x8000
+00000138  751A              jnz 0x154
+0000013A  8BD7              mov dx,di     ; set transpose
+0000013C  81E2FF00          and dx,0xff
+00000140  D1E2              shl dx,1
+00000142  89945307          mov [si+0x753],dx
+00000146  8BD7              mov dx,di
+00000148  81E2000F          and dx,0xf00
+0000014C  7431              jz 0x17f
+0000014E  F79C5307          neg word [si+0x753]
+00000152  EB2B              jmp short 0x17f
+
+00000154  D1E7              shl di,1   ; di = 2 * new sequence#
+00000156  8B2ED106          mov bp,[0x6d1]  ; song# offset
+0000015A  26037E6D          add di,[es:bp+0x6d]  ; add sequence table pointer
+0000015E  03FD              add di,bp            ; [es:di + ...] = channel sequence
+00000160  8BAC0B07          mov bp,[si+0x70b]    ; bp = sequence offset?
+00000164  26032D            add bp,[es:di]
+00000167  032ED106          add bp,[0x6d1]
+readseq_loop:
+0000016B  268B4600          mov ax,[es:bp+0x0]   ; ax = next sequence word
+0000016F  83840B0702        add word [si+0x70b],byte +0x2  ; sequence_offset += 2
+00000174  3DFFFF            cmp ax,0xffff  ; end of sequence?
+00000177  750E              jnz 0x187
+00000179  C7840B070000      mov word [si+0x70b],0x0
+
+0000017F  83841D0702        add word [si+0x71d],byte +0x2  ; loop, load next sequence word
+00000184  E962FF            jmp word 0xe9
+
+00000187  8BF8              mov di,ax  ; play current sequence
+00000189  2500F0            and ax,0xf000
+0000018C  3D00C0            cmp ax,0xc000   ; set instrument?
+0000018F  750A              jnz 0x19b
+00000191  81E7FF0F          and di,0xfff
+00000195  89BCD506          mov [si+0x6d5],di  ; pending instrument -> 0x6d5+ch*2
+00000199  EB44              jmp short 0x1df
+
+0000019B  3D0090            cmp ax,0x9000   ; set level?
+0000019E  750A              jnz 0x1aa
+000001A0  8BC7              mov ax,di
+000001A2  243F              and al,0x3f
+000001A4  88870708          mov [bx+0x807],al  ; pending level -> 0x807+ch
+000001A8  EB35              jmp short 0x1df
+
+000001AA  3D0070            cmp ax,0x7000   ; vibrato?
+000001AD  750A              jnz 0x1b9
+000001AF  81E7FF0F          and di,0xfff
+000001B3  89BCD107          mov [si+0x7d1],di  ; pending vibrato -> 0x7d1+ch*2
+000001B7  EB26              jmp short 0x1df
+
+000001B9  3D00D0            cmp ax,0xd000   ; slide up?
+000001BC  750E              jnz 0x1cc
+000001BE  81E7FF0F          and di,0xfff
+000001C2  89BCE307          mov [si+0x7e3],di  ; pending slide -> 0x7e3+ch*2
+000001C6  893ECC06          mov [0x6cc],di     ;   also -> 0x6cc (global)
+000001CA  EB13              jmp short 0x1df
+
+000001CC  3D00E0            cmp ax,0xe000  ; slide down?
+000001CF  7512              jnz 0x1e3
+000001D1  81E7FF0F          and di,0xfff
+000001D5  F7DF              neg di             ; negate slide speed
+000001D7  89BCE307          mov [si+0x7e3],di  ; pending slide -> 0x7e3+ch*2
+000001DB  893ECC06          mov [0x6cc],di     ;   also -> 0x6cc (global)
+
+000001DF  45                inc bp
+000001E0  45                inc bp
+000001E1  EB88              jmp short readseq_loop
+
+000001E3  3D0060            cmp ax,0x6000  ; note cut?
+000001E6  750C              jnz 0x1f4
+000001E8  89BCF906          mov [si+0x6f9],di  ; 0x6xxx -> 0x6f9+ch*2
+000001EC  C687220800        mov byte [bx+0x822],0x0  ; 0 -> 0x822+ch (keyOn)
+000001F1  E98501            jmp word 0x379
+
+; no spfx handling at all!?
+
+000001F4  8BD7              mov dx,di
+000001F6  B108              mov cl,0x8
+000001F8  D3EF              shr di,cl
+000001FA  83E71F            and di,byte +0x1f  ; di = repeat count
+000001FD  89BCF906          mov [si+0x6f9],di  ; repeat -> 0x6f9+ch*2
+00000201  8BFA              mov di,dx
+00000203  83E77F            and di,byte +0x7f  ; di = note
+00000206  83FF7E            cmp di,byte +0x7e  ; 0x7e -> hold the note
+00000209  740A              jz 0x215
+0000020B  83FF00            cmp di,byte +0x0   ; rest?
+0000020E  750D              jnz 0x21d
+00000210  C687220800        mov byte [bx+0x822],0x0  ; rest, release note
+hold_note:
+00000215  C687F40801        mov byte [bx+0x8f4],0x1  ; rest or hold
+0000021A  E95C01            jmp word 0x379
+new_note:
+0000021D  D1E7              shl di,1  ; di = note*2
+0000021F  F6C620            test dh,0x20
+00000222  7407              jz 0x22b
+00000224  C687F40802        mov byte [bx+0x8f4],0x2  ; tie
+00000229  EB0A              jmp short 0x235
+not_tie:
+0000022B  C687F40800        mov byte [bx+0x8f4],0x0  ; new note
+00000230  C687220800        mov byte [bx+0x822],0x0  ; release previous note
+
+play_note:  ; new note, tie or not, but not a rest / hold
+; reminder: di = note*2, bx = channel, si = channel*2,
+; dx = sequence word (tie 0x2000|repeat 0x1f00|note 0x00ff)
+00000235  C6872B0820        mov byte [bx+0x82b],0x20
+0000023A  F6C280            test dl,0x80  ; ??? note should be <0x80
+0000023D  7504              jnz 0x243     ; i guess this flag skips transpose!
+0000023F  03BC5307          add di,[si+0x753]  ; add transpose
+00000243  8BC7              mov ax,di     ; ax = transposed note * 2 (should be <96*2)
+00000245  88877707          mov [bx+0x777],al 
+00000249  8B852A09          mov ax,[di+0x92a]  ; ax = frequency register for note
+0000024D  8984F507          mov [si+0x7f5],ax  ; set frequency
+00000251  A1CC06            mov ax,[0x6cc]     ; copy slide again???
+00000254  8984E307          mov [si+0x7e3],ax
+00000258  C687920700        mov byte [bx+0x792],0x0  ; reset vibrato depth
+0000025D  E91901            jmp word 0x379
+
+00000260  8B84F906          mov ax,[si+0x6f9]
+00000264  25FF0F            and ax,0xfff       ; ax = pending repeat count
+00000267  8984E706          mov [si+0x6e7],ax  ; reset repeat
+0000026B  33ED              xor bp,bp
+0000026D  81BCF9060060      cmp word [si+0x6f9],0x6000  ; note cut?
+00000273  7353              jnc 0x2c8  ; skip to 0x2c8 if cut
+00000275  8B84D107          mov ax,[si+0x7d1]  ; pending vibrato effect cmd?
+00000279  3D0010            cmp ax,0x1000
+0000027C  7414              jz 0x292
+0000027E  88879207          mov [bx+0x792],al  ; update vibrato depth
+00000282  88A78907          mov [bx+0x789],ah  ; update vibrato speed
+00000286  D0EC              shr ah,1
+00000288  88A78007          mov [bx+0x780],ah  ; update vibrato position = speed/2
+0000028C  C784D1070010      mov word [si+0x7d1],0x1000  ; reset pending vibrato
+
+no_vibrato_change:
+00000292  8A870708          mov al,[bx+0x807]  ; pending level
+00000296  88875808          mov [bx+0x858],al  ; update channel level
+0000029A  8B84E307          mov ax,[si+0x7e3]
+0000029E  89846507          mov [si+0x765],ax
+000002A2  80BFF40801        cmp byte [bx+0x8f4],0x1  ; rest?
+000002A7  74B4              jz 0x25d  ; -> 0x379
+000002A9  8B84F507          mov ax,[si+0x7f5]  ; not rest, update frequency
+000002AD  89844107          mov [si+0x741],ax  ; set channelfreq[ch] from 0x7f5 above
+000002B1  80BFF40802        cmp byte [bx+0x8f4],0x2  ; tie?
+000002B6  74A5              jz 0x25d  ; -> 0x379
+000002B8  8A872B08          mov al,[bx+0x82b]  ; not tie, set keyOn
+000002BC  88872208          mov [bx+0x822],al
+000002C0  8BACD506          mov bp,[si+0x6d5]  ; bp = new note instrument
+000002C4  B104              mov cl,0x4
+000002C6  D3E5              shl bp,cl          ; bp *= 16
+
+000002C8  8B3ED106          mov di,[0x6d1]     ; load instrument #
+000002CC  26036D6F          add bp,[es:di+0x6f]
+000002D0  03EF              add bp,di          ; es:bp = 16 instrument bytes
+000002D2  268A4607          mov al,[es:bp+0x7]  ; al = modulator level reg(?)
+000002D6  88879808          mov [bx+0x898],al
+000002DA  268A460B          mov al,[es:bp+0xb]
+000002DE  8887B607          mov [bx+0x7b6],al
+000002E2  3C00              cmp al,0x0
+000002E4  741B              jz 0x301
+000002E6  268A460C          mov al,[es:bp+0xc]
+000002EA  8887C807          mov [bx+0x7c8],al
+000002EE  8BFD              mov di,bp
+000002F0  83C708            add di,byte +0x8
+000002F3  89BC9B07          mov [si+0x79b],di
+000002F7  C687AD0700        mov byte [bx+0x7ad],0x0
+000002FC  C687BF0700        mov byte [bx+0x7bf],0x0
+00000301  8A871809          mov al,[bx+0x918]
+00000305  0460              add al,0x60
+00000307  268A6600          mov ah,[es:bp+0x0]
+0000030B  E81202            call word opl2_maybe_write
+0000030E  8A871809          mov al,[bx+0x918]
+00000312  0480              add al,0x80
+00000314  268A6601          mov ah,[es:bp+0x1]
+00000318  E80502            call word opl2_maybe_write
+0000031B  268A4602          mov al,[es:bp+0x2]
+0000031F  88877808          mov [bx+0x878],al
+00000323  8A871809          mov al,[bx+0x918]
+00000327  0420              add al,0x20
+00000329  268A6603          mov ah,[es:bp+0x3]
+0000032D  E8F001            call word opl2_maybe_write
+00000330  8A871809          mov al,[bx+0x918]
+00000334  04E0              add al,0xe0
+00000336  268A6604          mov ah,[es:bp+0x4]
+0000033A  E8E301            call word opl2_maybe_write
+0000033D  8A872109          mov al,[bx+0x921]
+00000341  0460              add al,0x60
+00000343  268A6605          mov ah,[es:bp+0x5]
+00000347  E8D601            call word opl2_maybe_write
+0000034A  8A872109          mov al,[bx+0x921]
+0000034E  0480              add al,0x80
+00000350  268A6606          mov ah,[es:bp+0x6]
+00000354  E8C901            call word opl2_maybe_write
+00000357  8A872109          mov al,[bx+0x921]
+0000035B  0420              add al,0x20
+0000035D  268A6608          mov ah,[es:bp+0x8]
+00000361  E8BC01            call word opl2_maybe_write
+00000364  8A872109          mov al,[bx+0x921]
+00000368  04E0              add al,0xe0
+0000036A  268A6609          mov ah,[es:bp+0x9]
+0000036E  E8AF01            call word opl2_maybe_write
+00000371  268A460A          mov al,[es:bp+0xa]
+00000375  8887B808          mov [bx+0x8b8],al
+
+; entry point to update effects
+; slide
+00000379  8B846507          mov ax,[si+0x765]
+0000037D  01844107          add [si+0x741],ax
+
+; vibrato
+00000381  32E4              xor ah,ah
+00000383  8A879207          mov al,[bx+0x792]
+00000387  80BF800700        cmp byte [bx+0x780],0x0
+0000038C  7C16              jl 0x3a4
+0000038E  01844107          add [si+0x741],ax
+00000392  FE8F8007          dec byte [bx+0x780]
+00000396  7F1E              jg 0x3b6
+00000398  8A878907          mov al,[bx+0x789]
+0000039C  F6D8              neg al
+0000039E  88878007          mov [bx+0x780],al
+000003A2  EB12              jmp short 0x3b6
+000003A4  29844107          sub [si+0x741],ax
+000003A8  FE878007          inc byte [bx+0x780]
+000003AC  7508              jnz 0x3b6
+000003AE  8A878907          mov al,[bx+0x789]
+000003B2  88878007          mov [bx+0x780],al
+
+000003B6  8A873408          mov al,[bx+0x834] ; preset channel volume
+000003BA  02875808          add al,[bx+0x858] ; add effect volume
+000003BE  0206CE06          add al,[0x6ce]  ; add global volume
+000003C2  3C3F              cmp al,0x3f
+000003C4  7E02              jng 0x3c8
+000003C6  B03F              mov al,0x3f
+000003C8  8887EB08          mov [bx+0x8eb],al  ; channel volume
+000003CC  80BFB60700        cmp byte [bx+0x7b6],0x0
+000003D1  7459              jz 0x42c
+000003D3  FE8FBF07          dec byte [bx+0x7bf]
+000003D7  7D53              jnl 0x42c
+000003D9  8A87C807          mov al,[bx+0x7c8]
+000003DD  8887BF07          mov [bx+0x7bf],al
+000003E1  8BAC9B07          mov bp,[si+0x79b]
+000003E5  80BFAD0700        cmp byte [bx+0x7ad],0x0
+000003EA  752E              jnz 0x41a
+000003EC  268A4603          mov al,[es:bp+0x3]
+000003F0  32E4              xor ah,ah
+000003F2  8BE8              mov bp,ax
+000003F4  4D                dec bp
+000003F5  D1E5              shl bp,1
+000003F7  D1E5              shl bp,1
+000003F9  032ED306          add bp,[0x6d3]
+000003FD  89AC9B07          mov [si+0x79b],bp
+00000401  268A4602          mov al,[es:bp+0x2]
+00000405  FEC0              inc al
+00000407  8887AD07          mov [bx+0x7ad],al
+0000040B  26807E00FF        cmp byte [es:bp+0x0],0xff
+00000410  7408              jz 0x41a
+00000412  268A4600          mov al,[es:bp+0x0]
+00000416  88879808          mov [bx+0x898],al
+
+0000041A  FE8FAD07          dec byte [bx+0x7ad]
+0000041E  8A879808          mov al,[bx+0x898]
+00000422  26024601          add al,[es:bp+0x1]
+00000426  243F              and al,0x3f
+00000428  88879808          mov [bx+0x898],al
+
+0000042C  8A871809          mov al,[bx+0x918]
+00000430  0440              add al,0x40
+00000432  8AA77808          mov ah,[bx+0x878]
+00000436  8AD4              mov dl,ah
+00000438  80E2C0            and dl,0xc0
+0000043B  80E43F            and ah,0x3f
+0000043E  3AA7EB08          cmp ah,[bx+0x8eb]
+00000442  7F04              jg 0x448
+00000444  8AA7EB08          mov ah,[bx+0x8eb]
+00000448  0AE2              or ah,dl
+0000044A  E8D300            call word opl2_maybe_write
+0000044D  8A872109          mov al,[bx+0x921]
+00000451  0440              add al,0x40
+00000453  8AA79808          mov ah,[bx+0x898]
+00000457  F687B80801        test byte [bx+0x8b8],0x1  ; instrument connection/feedback?
+0000045C  7414              jz 0x472  ; FM mode - jmp to 0x472
+0000045E  8AD4              mov dl,ah  ; additive mode - adjust modulator volume?
+00000460  80E2C0            and dl,0xc0
+00000463  80E43F            and ah,0x3f
+00000466  3AA7EB08          cmp ah,[bx+0x8eb]
+0000046A  7F04              jg 0x470
+0000046C  8AA7EB08          mov ah,[bx+0x8eb]
+00000470  0AE2              or ah,dl
+
+00000472  E8AB00            call word opl2_maybe_write
+00000475  8AC3              mov al,bl
+00000477  04C0              add al,0xc0
+00000479  8AA7B808          mov ah,[bx+0x8b8]
+0000047D  E8A000            call word opl2_maybe_write
+00000480  8B844107          mov ax,[si+0x741]
+00000484  8AE0              mov ah,al
+00000486  8AC3              mov al,bl
+00000488  04A0              add al,0xa0
+0000048A  E89300            call word opl2_maybe_write
+0000048D  8B844107          mov ax,[si+0x741]
+00000491  02A72208          add ah,[bx+0x822]
+00000495  8AC3              mov al,bl
+00000497  04B0              add al,0xb0
+00000499  E88400            call word opl2_maybe_write
+0000049C  46                inc si
+0000049D  46                inc si
+0000049E  43                inc bx
+0000049F  83FB09            cmp bx,byte +0x9
+000004A2  7403              jz 0x4a7
+000004A4  E909FC            jmp word 0xb0
+000004A7  07                pop es
+000004A8  1F                pop ds
+000004A9  CB                retf
+
+; silence a channel
+opl2_channel_init:  ; di = channel#
+000004AA  53                push bx
+000004AB  32FF              xor bh,bh
+000004AD  8A8D1809          mov cl,[di+0x918]  ; op2
+000004B1  8AAD2109          mov ch,[di+0x921]  ; op1
+000004B5  32E4              xor ah,ah
+000004B7  8AC1              mov al,cl
+000004B9  0420              add al,0x20
+000004BB  E85A00            call word 0x518  ; 0 -> op2 0x20
+000004BE  8AC5              mov al,ch
+000004C0  0420              add al,0x20
+000004C2  E85300            call word 0x518  ; 0 -> op1 0x20
+000004C5  8AC1              mov al,cl
+000004C7  04E0              add al,0xe0
+000004C9  E84C00            call word 0x518  ; 0 -> op2 0xe0
+000004CC  8AC5              mov al,ch
+000004CE  04E0              add al,0xe0
+000004D0  E84500            call word 0x518  ; 0 -> op1 0xe0
+000004D3  8BC7              mov ax,di
+000004D5  04A0              add al,0xa0
+000004D7  E83E00            call word 0x518  ; 0 -> channel 0xa0
+000004DA  8BC7              mov ax,di
+000004DC  04B0              add al,0xb0
+000004DE  E83700            call word 0x518  ; 0 -> channel 0xb0
+000004E1  8BC7              mov ax,di
+000004E3  04C0              add al,0xc0
+000004E5  E83000            call word 0x518  ; 0 -> channel 0xc0
+000004E8  B43F              mov ah,0x3f
+000004EA  8AC1              mov al,cl
+000004EC  0440              add al,0x40
+000004EE  E82700            call word 0x518  ; 0x3f -> op2 0x40 (output level)
+000004F1  8AC5              mov al,ch
+000004F3  0440              add al,0x40
+000004F5  E82000            call word 0x518  ; 0x3f -> op1 0x40 (output level)
+000004F8  B4FF              mov ah,0xff
+000004FA  8AC1              mov al,cl
+000004FC  0460              add al,0x60
+000004FE  E81700            call word 0x518  ; 0xff -> op2 0x60 (AD)
+00000501  8AC1              mov al,cl
+00000503  0480              add al,0x80
+00000505  E81000            call word 0x518  ; 0xff -> op2 0x80 (SR)
+00000508  8AC5              mov al,ch
+0000050A  0460              add al,0x60
+0000050C  E80900            call word 0x518  ; 0xff -> op1 0x60 (AD)
+0000050F  8AC5              mov al,ch
+00000511  0480              add al,0x80
+00000513  E80200            call word 0x518  ; 0xff -> op1 0x80 (SR)
+00000516  5B                pop bx
+00000517  C3                ret
+
+; track which values we wrote already
+opl2_write_cache:
+00000518  8AD8              mov bl,al
+0000051A  88A72208          mov [bx+0x822],ah  ; 0x822+x = opl2 register x
+0000051E  EB10              jmp short opl2_write
+
+; check write against cache, and avoid write if unnecessary
+opl2_maybe_write:
+00000520  53                push bx
+00000521  8AD8              mov bl,al
+00000523  3AA72208          cmp ah,[bx+0x822]
+00000527  7502              jnz 0x52b
+00000529  5B                pop bx
+0000052A  C3                ret
+0000052B  88A72208          mov [bx+0x822],ah
+0000052F  5B                pop bx
+
+opl2_write:
+00000530  BA8803            mov dx,0x388
+00000533  EE                out dx,al
+00000534  EC                in al,dx
+00000535  EC                in al,dx
+00000536  EC                in al,dx
+00000537  EC                in al,dx
+00000538  EC                in al,dx
+00000539  EC                in al,dx
+0000053A  42                inc dx
+0000053B  8AC4              mov al,ah
+0000053D  EE                out dx,al
+0000053E  EC                in al,dx
+0000053F  EC                in al,dx
+00000540  EC                in al,dx
+00000541  EC                in al,dx
+00000542  EC                in al,dx
+00000543  EC                in al,dx
+00000544  EC                in al,dx
+00000545  EC                in al,dx
+00000546  EC                in al,dx
+00000547  EC                in al,dx
+00000548  EC                in al,dx
+00000549  EC                in al,dx
+0000054A  EC                in al,dx
+0000054B  EC                in al,dx
+0000054C  EC                in al,dx
+0000054D  EC                in al,dx
+0000054E  EC                in al,dx
+0000054F  EC                in al,dx
+00000550  EC                in al,dx
+00000551  EC                in al,dx
+00000552  EC                in al,dx
+00000553  EC                in al,dx
+00000554  EC                in al,dx
+00000555  EC                in al,dx
+00000556  EC                in al,dx
+00000557  EC                in al,dx
+00000558  EC                in al,dx
+00000559  EC                in al,dx
+0000055A  C3                ret
+
+cmd_6:
+0000055B  FA                cli
+0000055C  B80460            mov ax,0x6004
+0000055F  E8CEFF            call word opl2_write
+00000562  B80480            mov ax,0x8004
+00000565  E8C8FF            call word opl2_write
+00000568  4A                dec dx
+00000569  EC                in al,dx
+0000056A  8AD8              mov bl,al
+0000056C  B802FF            mov ax,0xff02
+0000056F  E8BEFF            call word opl2_write
+00000572  B80421            mov ax,0x2104
+00000575  E8B8FF            call word opl2_write
+00000578  4A                dec dx
+00000579  B90002            mov cx,0x200
+0000057C  EC                in al,dx
+0000057D  E2FD              loop 0x57c
+0000057F  24E0              and al,0xe0
+00000581  34C0              xor al,0xc0
+00000583  750E              jnz 0x593
+00000585  80E3E0            and bl,0xe0
+00000588  7509              jnz 0x593
+0000058A  B80460            mov ax,0x6004
+0000058D  E8A0FF            call word opl2_write
+00000590  F8                clc
+00000591  EB01              jmp short 0x594
+00000593  F9                stc
+00000594  07                pop es
+00000595  1F                pop ds
+00000596  FB                sti
+00000597  CB                retf
+
+cmd_5:
+00000598  80E33F            and bl,0x3f
+0000059B  881ECE06          mov [0x6ce],bl
+0000059F  07                pop es
+000005A0  1F                pop ds
+000005A1  CB                retf
+
+cmd_2:  ; load song?
+000005A2  8E06CF06          mov es,[0x6cf]
+000005A6  B105              mov cl,0x5
+000005A8  D3E3              shl bx,cl
+000005AA  8B36D106          mov si,[0x6d1]
+000005AE  26035C6B          add bx,[es:si+0x6b]  ; es:0x6b is the pointer table
+000005B2  03DE              add bx,si  ; es:bx = arrangement pointer
+000005B4  33F6              xor si,si
+
+; es:bx+si points to channel si/2's arrangement list (starting with its speed)
+000005B6  26833800          cmp word [es:bx+si],byte +0x0
+000005BA  7453              jz 0x60f
+000005BC  268B38            mov di,[es:bx+si]
+000005BF  033ED106          add di,[0x6d1]
+000005C3  268B05            mov ax,[es:di]  ; ax = channel si/2 speed
+000005C6  47                inc di
+000005C7  47                inc di
+000005C8  89BC2F07          mov [si+0x72f],di  ; [si+0x72f] = channel si/2 arrangement ptr
+000005CC  8BFE              mov di,si
+000005CE  D1EF              shr di,1  ; di = channel#
+000005D0  88851908          mov [di+0x819],al  ; write channel speed
+000005D4  268A4112          mov al,[es:bx+di+0x12]  ; ??? what's after arrangement ptrs?
+000005D8  243F              and al,0x3f
+000005DA  88853408          mov [di+0x834],al  ; crooner.d00 has an 8 in the 7th channel here
+000005DE  C685680001        mov byte [di+0x68],0x1
+000005E3  C7840B070000      mov word [si+0x70b],0x0
+000005E9  C7841D070000      mov word [si+0x71d],0x0
+000005EF  2680791280        cmp byte [es:bx+di+0x12],0x80
+000005F4  7319              jnc 0x60f
+000005F6  C685100800        mov byte [di+0x810],0x0
+000005FB  C784E7060000      mov word [si+0x6e7],0x0
+00000601  C78465070000      mov word [si+0x765],0x0
+00000607  C685580800        mov byte [di+0x858],0x0
+0000060C  E89BFE            call word opl2_channel_init
+0000060F  46                inc si
+00000610  46                inc si
+00000611  83FE12            cmp si,byte +0x12
+00000614  75A0              jnz 0x5b6
+
+00000616  07                pop es
+00000617  1F                pop ds
+00000618  CB                retf
+
+cmd_4:
+00000619  8E06CF06          mov es,[0x6cf]
+0000061D  B105              mov cl,0x5
+0000061F  D3E3              shl bx,cl
+00000621  8B36D106          mov si,[0x6d1]
+00000625  26035C6B          add bx,[es:si+0x6b]
+00000629  03DE              add bx,si
+0000062B  33F6              xor si,si
+0000062D  33FF              xor di,di
+0000062F  26833800          cmp word [es:bx+si],byte +0x0
+00000633  7416              jz 0x64b
+00000635  80BD680001        cmp byte [di+0x68],0x1  ; toggle channel??
+0000063A  7407              jz 0x643
+0000063C  C685680001        mov byte [di+0x68],0x1
+00000641  EB08              jmp short 0x64b
+00000643  C685680000        mov byte [di+0x68],0x0
+00000648  E85FFE            call word opl2_channel_init
+0000064B  46                inc si
+0000064C  46                inc si
+0000064D  47                inc di
+0000064E  83FF09            cmp di,byte +0x9
+00000651  75DC              jnz 0x62f
+00000653  07                pop es
+00000654  1F                pop ds
+00000655  CB                retf
+
+cmd_0:
+00000656  891ECF06          mov [0x6cf],bx
+0000065A  890ED106          mov [0x6d1],cx
+0000065E  8EC3              mov es,bx
+00000660  8BF9              mov di,cx
+00000662  268B7573          mov si,[es:di+0x73]
+00000666  03F1              add si,cx
+00000668  8936D306          mov [0x6d3],si
+
+cmd_1:
+0000066C  C606CE0600        mov byte [0x6ce],0x0  ; max global volume
+00000671  33FF              xor di,di             ; loop, clear all channels
+00000673  E834FE            call word opl2_channel_init
+00000676  C685680000        mov byte [di+0x68],0x0
+0000067B  47                inc di
+0000067C  83FF09            cmp di,byte +0x9
+0000067F  75F2              jnz 0x673
+00000681  B94302            mov cx,0x243
+00000684  BFD506            mov di,0x6d5
+00000687  8CC8              mov ax,cs
+00000689  8EC0              mov es,ax
+0000068B  32C0              xor al,al
+0000068D  FC                cld
+0000068E  F3AA              rep stosb
+00000690  B001              mov al,0x1
+00000692  B420              mov ah,0x20
+00000694  E899FE            call word opl2_write
+00000697  B008              mov al,0x8
+00000699  B400              mov ah,0x0
+0000069B  E892FE            call word opl2_write
+0000069E  B0BD              mov al,0xbd
+000006A0  B4C0              mov ah,0xc0
+000006A2  E88BFE            call word opl2_write
+
+000006A5  07                pop es
+000006A6  1F                pop ds
+000006A7  F8                clc
+000006A8  CB                retf
+
+entry:
+000006A9  1E                push ds
+000006AA  06                push es
+000006AB  0E                push cs
+000006AC  1F                pop ds
+000006AD  80FC06            cmp ah,0x6
+000006B0  7FF3              jg 0x6a5
+000006B2  D0E4              shl ah,1
+000006B4  8AC4              mov al,ah
+000006B6  32E4              xor ah,ah
+000006B8  8BF0              mov si,ax
+000006BA  FFA4BE06          jmp word [si+0x6be]
+
+; jump table for various player commands, it would seem
+; AH being the command
+0x6be: dw 0x656, 0x66c, 0x5a2, 0x0a8, 0x619, 0x598, 0x55b
+
+
+; mapping of opl2 operators to channels
+opl2_operator_map:
+0x918:  db 03 04 05 0B 0C 0D 13 14 15  ; op2
+0x921:  db 00 01 02 08 09 0A 10 11 12  ; op1
+
+; note frequency register values
+0x92a:  db  5701 6B01 8101 9801 B001 CA01 E501 0202 2002 4102
+; etc etc

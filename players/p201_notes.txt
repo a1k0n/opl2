@@ -1,0 +1,64 @@
+[0x6cc] -> next slide?
+
+[0x6cf] -> song pointer
+[0x6d1] -> song# offset? assume 0
+
+0x6ce -> global volume?
+
+0x68+ch -> channel enable, initialized to 1
+0x70b+ch*2 -> ?? initialized to 0
+0x71d+ch*2 -> ch arrangement position
+
+0x6e7+ch*2 -> repeat count; initialized to 0
+0x858+ch*2 -> channel volume;  initialized to 0
+
+(inside sequence read loop)
+0x6d5+ch*2 -> instrument#
+0x807+ch -> level (volume)
+0x7d1+ch*2 -> vibrato, 0x1000 if disabled?
+0x6f9+ch*2 -> repeat count + 0x6000 note cut flag
+0x8f4+ch   -> 1 if rest / holding note, 2 if note tie, 0 if new note
+0x82b+ch -> 0x20, always
+0x777+ch -> note to play
+0x7f5+ch*2 -> frequency register for note to play
+0x898+ch -> modulator level?
+
+0x72f+ch*2 -> channel ch arrangement data
+
+0x834+ch -> preset channel volume
+
+0x753 -> channelTranspose (x2 for word offset)
+0x7f5 -> channelBaseFreq, loaded from freq reg table @0x92a + note
+0x741 -> channelFreq
+0x7e3 -> channelFreqInc   -> for slide up / slide down
+0x765 -> updatedChannelFreqInc (maybe after one tick? not sure)
+
+0x810+ch -> tick count, initialized to 0; decrements until -1 then resets to speed
+         -> when == 0, 
+0x819+ch -> speed from beginning of arrangement
+
+0x822 -> channelKeyOn (0x20 or 0x00, added to channel freq reg)
+
+0x789 -> vibrato speed (0..f)
+0x792 -> vibrato depth (00..ff)
+
+0x780 -> vibratoIdx (initialized to vibrato speed / 2)
+  // 381
+  // (ax = zeroextend vibratoDepth)
+  if (vibratoIdx >= 0) {
+    // 38e
+    channelFreq += vibratoDepth;
+    vibratoIdx--;
+    if (vibratoIdx <= 0) {
+      // 398
+      vibratoIdx = -vibratoSpeed;
+    } // else 3b6
+  } else {
+    // 3a4
+    channelFreq -= vibratoDepth;
+    vibratoIdx++;
+    if (vibratoIdx == 0) {
+      vibratoIdx = vibratoSpeed;
+    }
+  }
+  // 3b6
