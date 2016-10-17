@@ -246,7 +246,7 @@ Envelope.prototype.setADSR = function(att, dec, sus, rel) {
   // so dt * (282624 >> att) = 255
   // dt = 255 / (282624 >> att)
   //    = (255 << att) / 282624
-  this.attackInc = (255 << att) / (4*282624);
+  this.attackInc = (511 << att) / (282624);
 
   // decay and release seem to use these linear rates
   this.decayInc = (1 << dec) / 768.0;  // ???
@@ -577,7 +577,7 @@ function D00Player(song) {
     this.sequencers[i] = new D00Sequencer(song.arrangement[i], song)
   }
   // one-note test
-  // this.channels[0].setD00Instrument(song.instruments[6]);
+  // this.channels[0].setD00Instrument(song.instruments[1]);
   // this.channels[0].playD00Note(48);
 }
 
@@ -674,12 +674,12 @@ window.onload = function() {
     var audioContext = window.AudioContext || window.webkitAudioContext;
     audioctx = new audioContext();
     gainNode = audioctx.createGain();
-    gainNode.gain.value = 0.1;  // master volume
+    gainNode.gain.value = 0.2;  // master volume
   }
   if (audioctx.createScriptProcessor === undefined) {
-    jsNode = audioctx.createJavaScriptNode(1024, 0, 2);
+    jsNode = audioctx.createJavaScriptNode(2048, 0, 2);
   } else {
-    jsNode = audioctx.createScriptProcessor(1024, 0, 2);
+    jsNode = audioctx.createScriptProcessor(2048, 0, 2);
   }
   jsNode.onaudioprocess = audioCallback;
   jsNode.connect(gainNode);
