@@ -70,6 +70,8 @@ def ReadD00(f):
     arrangement, sequence, instrument, desc, spfx = ptrs
     arrs = struct.unpack("HHHHHHHHH", f[arrangement:arrangement+18])
     arrs = [ReadArrangementWords(f, arr) for arr in arrs]
+    chvol = [ord(x) for x in f[arrangement+18:arrangement+27]]
+    print 'global channel volume:', chvol
 
     # show arrangement
     print 'song arrangement:'
@@ -131,7 +133,8 @@ def ReadD00(f):
         "arrangement": arrs,
         "sequences": seqs,
         "instruments": instrs,
-        "spfx": spfxs
+        "spfx": spfxs,
+        "chvol": chvol,
     }
 
     open('song.js', 'w').write("song=" + json.dumps(jsonSong))

@@ -18,19 +18,20 @@ var freqMulTbl = [0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 12, 12, 15, 15];
 
 // in .d00 adlib songs, the note corresponds to an entry in this table which is
 // the per-sample increment for that note (assuming the default 49716
-// samplerate and 10-bit wave table periods)
-var d00IncrTable = [  // reverse engineered and transformed from JCH's player
-  0.334961, 0.354492, 0.375977, 0.398438, 0.421875, 0.447266, 0.473633,
-  0.501953, 0.53125, 0.563477, 0.59668, 0.631836, 0.669922, 0.708984, 0.751953,
-  0.796875, 0.84375, 0.894531, 0.947266, 1.00391, 1.0625, 1.12695, 1.19336,
-  1.26367, 1.33984, 1.41797, 1.50391, 1.59375, 1.6875, 1.78906, 1.89453,
-  2.00781, 2.125, 2.25391, 2.38672, 2.52734, 2.67969, 2.83594, 3.00781, 3.1875,
-  3.375, 3.57812, 3.78906, 4.01562, 4.25, 4.50781, 4.77344, 5.05469, 5.35938,
-  5.67188, 6.01562, 6.375, 6.75, 7.15625, 7.57812, 8.03125, 8.5, 9.01562,
-  9.54688, 10.1094, 10.7188, 11.3438, 12.0312, 12.75, 13.5, 14.3125, 15.1562,
-  16.0625, 17, 18.0312, 19.0938, 20.2188, 21.4375, 22.6875, 24.0625, 25.5, 27,
-  28.625, 30.3125, 32.125, 34, 36.0625, 38.1875, 40.4375, 42.875, 45.375,
-  48.125, 51, 54, 57.25, 60.625, 64.25, 68, 72.125, 76.375, 80.875];
+// samplerate and 10-bit wave table periods) represented as a 10-bit field + a
+// 3-bit octave number
+var d00NoteTable = [  // ripped from JCH's player
+  0x0157, 0x016b, 0x0181, 0x0198, 0x01b0, 0x01ca, 0x01e5, 0x0202, 0x0220,
+  0x0241, 0x0263, 0x0287, 0x0557, 0x056b, 0x0581, 0x0598, 0x05b0, 0x05ca,
+  0x05e5, 0x0602, 0x0620, 0x0641, 0x0663, 0x0687, 0x0957, 0x096b, 0x0981,
+  0x0998, 0x09b0, 0x09ca, 0x09e5, 0x0a02, 0x0a20, 0x0a41, 0x0a63, 0x0a87,
+  0x0d57, 0x0d6b, 0x0d81, 0x0d98, 0x0db0, 0x0dca, 0x0de5, 0x0e02, 0x0e20,
+  0x0e41, 0x0e63, 0x0e87, 0x1157, 0x116b, 0x1181, 0x1198, 0x11b0, 0x11ca,
+  0x11e5, 0x1202, 0x1220, 0x1241, 0x1263, 0x1287, 0x1557, 0x156b, 0x1581,
+  0x1598, 0x15b0, 0x15ca, 0x15e5, 0x1602, 0x1620, 0x1641, 0x1663, 0x1687,
+  0x1957, 0x196b, 0x1981, 0x1998, 0x19b0, 0x19ca, 0x19e5, 0x1a02, 0x1a20,
+  0x1a41, 0x1a63, 0x1a87, 0x1d57, 0x1d6b, 0x1d81, 0x1d98, 0x1db0, 0x1dca,
+  0x1de5, 0x1e02, 0x1e20, 0x1e41, 0x1e63, 0x1e87];
 
 function initTables() {
   // The OPL2 synthesizer does not have any kind of multiplier; it multiplies
@@ -250,7 +251,7 @@ Envelope.prototype.setADSR = function(att, dec, sus, rel) {
   // decay and release seem to use these linear rates
   this.decayInc = (1 << dec) / 768.0;  // ???
   this.releaseInc = (1 << rel) / 768.0;
-  this.sustainLevel = sus << 3;  // this must be scaled by some factor. *shrug*
+  this.sustainLevel = sus << 7;  // this must be scaled by some factor. *shrug*
   // sustain level 0 is full volume
 }
 
@@ -313,7 +314,7 @@ Envelope.prototype.generate = function(level, numSamples, out) {
   this.vol = vol;
 }
 
-function Channel(num) {
+function Channel(num, globalLevel) {
   this.num = num;
   this.carrier = new Operator();
   this.cenv = new Envelope();
@@ -324,6 +325,7 @@ function Channel(num) {
   this.clevel = 0;
   this.mlevel = 0;
   this.level = 0;
+  this.globalLevel = globalLevel << 5;
   this.connection = 0;
 }
 
@@ -374,11 +376,19 @@ Channel.prototype.setD00Instrument = function(data) {
   this.connection = data[10] & 1;
 }
 
-Channel.prototype.playD00Note = function(note, retrig) {
+Channel.prototype.setFreqReg = function(freqReg) {
   // adjust increments for local playback sampling rate sampleRate_
+  // original chip sample clock is 14.31818MHz divided down by 288
   var f_scale = 14313180.0 / (288 * sampleRate_);
-  this.carrier.phaseIncr = d00IncrTable[note] * this.cmul * f_scale;
-  this.modulator.phaseIncr = d00IncrTable[note] * this.mmul * f_scale;
+  var incr = ((freqReg & 0x3ff) << ((freqReg >> 10) & 7)) / 1024.0;
+  this.carrier.phaseIncr = incr * this.cmul * f_scale;
+  this.modulator.phaseIncr = incr * this.mmul * f_scale;
+}
+
+Channel.prototype.playD00Note = function(note, retrig) {
+  this.freqReg = d00NoteTable[note];
+  this.setFreqReg(this.freqReg);
+
   if (retrig) {
     this.cenv.keyOn();
     this.menv.keyOn();
@@ -391,7 +401,7 @@ Channel.prototype.releaseNote = function() {
 }
 
 Channel.prototype.setLevel = function(level) {
-  this.level = level << 4;
+  this.level = level << 5;
 }
 
 // generation requires two scratch buffers at least as big as numSamples
@@ -404,7 +414,7 @@ Channel.prototype.generate = function(numSamples, out, scratch1, scratch2) {
   // modulator output into scratch1
   this.modulator.genModulatorWave(scratch1, numSamples, scratch1);
   // carrier envelope into scratch2
-  this.cenv.generate(this.clevel + this.level, numSamples, scratch2);
+  this.cenv.generate(this.clevel + this.level + this.globalLevel, numSamples, scratch2);
   // and final output into out
   this.carrier.genCarrierWave(scratch2, scratch1, numSamples, out);
 }
@@ -422,6 +432,13 @@ function D00Sequencer(arrangement, song) {
   this.tick = 0;
   this.repeatCount = 0;
 
+  this.slide = 0;
+
+  this.vibDepth = 0;
+  this.vibRate = 0;
+  this.vibIdx = 0;
+
+  this.instNum = 0;
   this.displayEff = "    ";
   this.displayNote = "---";
 }
@@ -456,6 +473,7 @@ D00Sequencer.prototype.nextRow = function(song, channel) {
     this.repeatCount--;
     return;
   }
+  var slide = 0;
   while (true) {
     if (this.seqPtr >= this.seq.length) {
       this.seq = this.nextSeq(song);
@@ -467,12 +485,19 @@ D00Sequencer.prototype.nextRow = function(song, channel) {
     // console.log(this.seqPtr, e, eff, data);
     if (eff == 0x09) {  // change level
       channel.setLevel(data);
+    } else if (eff == 0x07) {  // vibrato
+      this.vibrato = e & 0xfff;
+    } else if (eff == 0x0d) {  // portamento up
+      slide = data;
+    } else if (eff == 0x0e) {  // portamento down
+      slide = -data;
     } else if (eff == 0x0b) {  // spfx?
       // hack, spfx not supported but at least we can use the instrument
       channel.setD00Instrument(song.instruments[song.spfx[data][0]]);
     } else if (eff == 0x0c) {  // change instrument?
       // console.log('instrument', channel.num, data);
       channel.setD00Instrument(song.instruments[data]);
+      this.instNum = data;
     } else if (eff < 4) {  // note w/ tie or repeats
       var retrig = eff < 2;  // 0000-1fff -> note (retrigger), 2000-3fff -> tie
       repeat = (e & 0x1fff) >> 8;
@@ -483,8 +508,19 @@ D00Sequencer.prototype.nextRow = function(song, channel) {
         this.displayNote = "^^^";
       } else if (note < 96) {
         channel.playD00Note(note + this.transpose, retrig);
+        this.vibDepth = 0;  // this is how the d00 player asm code does it
+        // reset pending effects
         this.displayNote = notenames[note % 12] + ""+(0|(note / 12));
       }
+
+      if (this.vibrato !== undefined) {
+        this.vibRate = (this.vibrato & 0xf00) >> 8;
+        this.vibDepth = this.vibrato & 0xff;
+        this.vibPos = this.vibRate >> 1;
+      }
+      this.slide = slide;  // update per-tick effects
+      this.vibrato = undefined;
+
       return;
     }
   }
@@ -497,11 +533,36 @@ D00Sequencer.prototype.nextTick = function(song, channel) {
     this.nextRow(song, channel);
     newRow = true;
   }
+  if (this.tick != 0) {
+    var resetFreq = false;
+    if (this.slide != 0) {
+      channel.freqReg += this.slide;
+      resetFreq = true;
+    }
+    if (this.vibRate != 0) {
+      if (this.vibPos >= 0) {
+        channel.freqReg += this.vibDepth;
+        this.vibPos--;
+        if (this.vibPos == 0) {
+          this.vibPos = -this.vibRate;
+        }
+      } else {
+        channel.freqReg -= this.vibDepth;
+        this.vibPos++;
+        if (this.vibPos == 0) {
+          this.vibPos = this.vibRate;
+        }
+      }
+      resetFreq = true;
+    }
+    if (resetFreq) {
+      channel.setFreqReg(channel.freqReg);
+    }
+  }
   this.tick++;
   if (this.tick > this.speed) {
     this.tick = 0;
   }
-  // TODO: effects!
   return newRow;
 }
 
@@ -512,11 +573,11 @@ function D00Player(song) {
   this.sequencers = [];
   this.song = song;
   for (var i = 0; i < 9; i++) {
-    this.channels[i] = new Channel(i);
+    this.channels[i] = new Channel(i, song.chvol[i]);
     this.sequencers[i] = new D00Sequencer(song.arrangement[i], song)
   }
   // one-note test
-  // this.channels[0].setD00Instrument(song.instruments[5]);
+  // this.channels[0].setD00Instrument(song.instruments[6]);
   // this.channels[0].playD00Note(48);
 }
 
@@ -524,12 +585,14 @@ function D00Player(song) {
 D00Player.prototype.nextTick = function() {
   var newRow = false;
   /*
+  // one-note test
   f++;
   if (f == 40) {
     this.channels[0].releaseNote();
   }
   return false;
   */
+
   for (var i = 0; i < 9; i++) {
     // console.log("nextTick", i);
     if (this.sequencers[i].nextTick(this.song, this.channels[i])) {
@@ -543,9 +606,9 @@ var patternDisplay = [];
 D00Player.prototype.updateDisplay = function() {
   rowDisplay = [];
   for (var i = 0; i < 9; i++) {
-    rowDisplay.push(this.sequencers[i].displayNote);
+    rowDisplay.push(this.sequencers[i].instNum + " " + this.sequencers[i].displayNote);
   }
-  patternDisplay.push(rowDisplay.join(' '));
+  patternDisplay.push(rowDisplay.join(' | '));
   while (patternDisplay.length > 16) {
     patternDisplay.shift();
   }
