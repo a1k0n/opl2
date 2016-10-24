@@ -122,17 +122,17 @@ void setup() {
   ym3812_write(0x08, 0x00);  // disable CSM
   ym3812_write(0xbd, 0xc0);  // full vib/tremolo depth
   
-  ym3812_write(0x60 + op1, 0x55);  // ad
-  ym3812_write(0x80 + op1, 0x8f);  // sr
+  ym3812_write(0x60 + op1, 0x4f);  // ad
+  ym3812_write(0x80 + op1, 0x0f);  // sr
   ym3812_write(0x40 + op1, 0x00);  // ksl / output level
-  ym3812_write(0x20 + op1, 0x01);  // multiplier + vibrato etc
-  ym3812_write(0xe0 + op1, 0x00);  // waveform (sine)
+  ym3812_write(0x20 + op1, 0x21);  // multiplier, vibrato, sustain 0x20
+  ym3812_write(0xe0 + op1, 0x02);  // waveform (half sine)
 
   ym3812_write(0x60 + op2, 0xff);  // ad
   ym3812_write(0x80 + op2, 0xff);  // sr
-  ym3812_write(0x40 + op2, 0x3f);  // ksl / output level
+  ym3812_write(0x40 + op2, 0x3f);  // ksl / output level  (silence, no modulation)
   ym3812_write(0x20 + op2, 0x00);  // multiplier + vibrato etc
-  ym3812_write(0xe0 + op2, 0x00);  // waveform (half sine)
+  ym3812_write(0xe0 + op2, 0x00);  // waveform (sine)
   ym3812_write(0xc0 + chan, 0x00);  // synthtype + feedback
 
   ym3812_write(0xa0, 0);  // f-num 512 octave 1
