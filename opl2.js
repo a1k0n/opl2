@@ -105,7 +105,9 @@ Operator.prototype.genCarrierWave = function(vol, modulation, numSamples, out) {
     for (var i = 0; i < numSamples; i++) {
       var m = p + modulation[i];  // m = modulated phase
       var l = logSinTbl[m & 511] + vol[i];  // l = -log(sin(p)) - log(volume)
-      var w = expTbl[l & 0xff] >> (l >> 8);  // table-based exponentiation: w = 4096 * 2^(-l/256)
+      var w = 0;
+      if (l <= 7935)  // we need to special-case this because x >> 32 === x >> 0 in javascript
+        w = expTbl[l & 0xff] >> (l >> 8);  // table-based exponentiation: w = 4096 * 2^(-l/256)
       if (m & 512) w = -w;  // negative part of sin wave
       p += dp;  // phase increment
       out[i] += w;
@@ -116,7 +118,8 @@ Operator.prototype.genCarrierWave = function(vol, modulation, numSamples, out) {
       var m = p + modulation[i];
       if (m & 512) {
         var l = logSinTbl[m & 511] + vol[i];
-        w = expTbl[l & 0xff] >> (l >> 8);
+        if (l <= 7935)
+          w = expTbl[l & 0xff] >> (l >> 8);
       }
       p += dp;
       out[i] += w;
@@ -125,7 +128,9 @@ Operator.prototype.genCarrierWave = function(vol, modulation, numSamples, out) {
     for (var i = 0; i < numSamples; i++) {
       var m = p + modulation[i];
       var l = logSinTbl[m & 511] + vol[i];
-      var w = expTbl[l & 0xff] >> (l >> 8);
+      var w = 0;
+      if (l <= 7935)
+        w = expTbl[l & 0xff] >> (l >> 8);
       p += dp;
       out[i] += w;
     }
@@ -135,7 +140,8 @@ Operator.prototype.genCarrierWave = function(vol, modulation, numSamples, out) {
       var m = p + modulation[i];
       if (m & 256) {
         var l = logSinTbl[m & 255] + vol[i];
-        w = expTbl[l & 0xff] >> (l >> 8);
+        if (l <= 7935)
+          w = expTbl[l & 0xff] >> (l >> 8);
       }
       p += dp;
       out[i] += w;
@@ -178,7 +184,11 @@ Operator.prototype.genModulatorWave = function(vol, numSamples, out) {
       var m = p + ((w + w1) >> feedbackShift);  // m = modulated phase
       w1 = w;
       var l = logSinTbl[m & 511] + vol[i];  // l = -log(sin(p)) - log(volume)
-      w = expTbl[l & 0xff] >> (l >> 8);  // table-based exponentiation: w = 4096 * 2^(-l/256)
+      if (l >= 7936) {  // special case because x >> 32 === x >> 0
+        w = 0;  // we want x >> (31 or more) === 0
+      } else {
+        w = expTbl[l & 0xff] >> (l >> 8);  // table-based exponentiation: w = 4096 * 2^(-l/256)
+      }
       if (m & 512) w = -w;  // negative part of sin wave
       p += dp;  // phase increment
       out[i] = w;
@@ -189,7 +199,11 @@ Operator.prototype.genModulatorWave = function(vol, numSamples, out) {
       w1 = w;
       if (m & 512) {
         var l = logSinTbl[m & 511] + vol[i];
-        w = expTbl[l & 0xff] >> (l >> 8);
+        if (l >= 7936) {
+          w = 0;
+        } else {
+          w = expTbl[l & 0xff] >> (l >> 8);
+        }
       } else {
         w = 0;
       }
@@ -201,7 +215,11 @@ Operator.prototype.genModulatorWave = function(vol, numSamples, out) {
       var m = p + ((w + w1) >> feedbackShift);
       w1 = w;
       var l = logSinTbl[m & 511] + vol[i];
-      w = expTbl[l & 0xff] >> (l >> 8);
+      if (l >= 7936) {
+        w = 0;
+      } else {
+        w = expTbl[l & 0xff] >> (l >> 8);
+      }
       p += dp;
       out[i] = w;
     }
@@ -211,7 +229,11 @@ Operator.prototype.genModulatorWave = function(vol, numSamples, out) {
       w1 = w;
       if (m & 256) {
         var l = logSinTbl[m & 255] + vol[i];
-        w = expTbl[l & 0xff] >> (l >> 8);
+        if (l >= 7936) {
+          w = 0;
+        } else {
+          w = expTbl[l & 0xff] >> (l >> 8);
+        }
       } else {
         w = 0;
       }
@@ -504,6 +526,9 @@ D00Sequencer.prototype.nextRow = function(song, channel) {
     } else if (eff == 0x0c) {  // change instrument?
       // console.log('instrument', channel.num, data);
       channel.setD00Instrument(song.instruments[data]);
+      if (data == 0) {  // silence channel
+        channel.releaseNote();
+      }
       this.instNum = data;
     } else if (eff < 4) {  // note w/ tie or repeats
       var retrig = eff < 2;  // 0000-1fff -> note (retrigger), 2000-3fff -> tie
@@ -622,13 +647,19 @@ D00Player.prototype.updateDisplay = function() {
   document.getElementById("b").innerHTML = patternDisplay.join("\n");
 }
 
+var scratch1 = new Int32Array(4096);
+var scratch2 = new Int32Array(4096);
+var outbuf = new Int32Array(4096);
+
 D00Player.prototype.generate = function(bufLength, dataL, dataR) {
   // if i were ambitious here this would be a float
   var samplesPerTick = 0 | (sampleRate_ / this.tickRate);
 
-  var scratch1 = new Int32Array(samplesPerTick);
-  var scratch2 = new Int32Array(samplesPerTick);
-  var outbuf = new Int32Array(samplesPerTick);
+  if (scratch1.length < samplesPerTick) {
+    scratch1 = new Int32Array(samplesPerTick);
+    scratch2 = new Int32Array(samplesPerTick);
+    outbuf = new Int32Array(samplesPerTick);
+  }
 
   var offset = 0;
   while (offset < bufLength) {
