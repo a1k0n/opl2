@@ -33,6 +33,8 @@ var d00NoteTable = [  // ripped from JCH's player
   0x1a41, 0x1a63, 0x1a87, 0x1d57, 0x1d6b, 0x1d81, 0x1d98, 0x1db0, 0x1dca,
   0x1de5, 0x1e02, 0x1e20, 0x1e41, 0x1e63, 0x1e87];
 
+var attackTable = [];
+
 function initTables() {
   // The OPL2 synthesizer does not have any kind of multiplier; it multiplies
   // by adding in log space, and then exponentiating using this 2^0 .. 2^1
@@ -53,6 +55,11 @@ function initTables() {
   for (var i = 0; i < 512; i++) {
     // logSinTbl = np.round(-np.log(np.sin((np.arange(512)+0.5) * np.pi / 512)) / np.log(2) * 256).astype(np.int32)
     logSinTbl[i] = -Math.log(Math.sin((i+0.5) * Math.PI / 512)) / Math.log(2) * 256 + 0.5;
+  }
+  var x = 512;
+  for (var i = 0; i < 36; i++) {
+    attackTable.push(8*x);
+    x -= (x >> 3) + 1;
   }
 }
 
@@ -239,14 +246,14 @@ Envelope.prototype.setADSR = function(att, dec, sus, rel) {
   // N.B.: needs adjustment for output sampling frequency
   // we also need to look at key scaling rate for the channel
 
-  // just a guess here based on the weird dosbox adlib code
-  // will test on a real YM3812 soon
-  // attack follows the half-sine curve 0..255
-  // and it takes something like (282624 >> att) samples to complete
-  // so dt * (282624 >> att) = 255
-  // dt = 255 / (282624 >> att)
-  //    = (255 << att) / 282624
-  this.attackInc = (511 << att) / (282624);
+  // So on a real YM3812, with attack set at 4, the volume changes every 512 samples
+  // according to a schedule:
+  //   v[0] = 4096
+  //   v[i] = v[0] - (v[0]>>3) - 1
+  // since each volume level has a period of 512 samples at rate 4,
+  // rate 0 would have a period of 512 << 4 or 8192
+  // so we have a 13-bit counter
+  this.attackInc = 1 << att;  // TODO: adjust for relative sampling frequency
 
   // decay and release seem to use these linear rates
   this.decayInc = (1 << dec) / 768.0;  // ???
@@ -272,12 +279,12 @@ Envelope.prototype.generate = function(level, numSamples, out) {
   var offset = 0;
   while (offset < numSamples) {
     if (this.adsrMode == 0) {  // attack
-      while (offset < numSamples && this.attackPhase < 256) {
-        vol = logSinTbl[0|this.attackPhase];
+      while (offset < numSamples && this.attackPhase < 8192 * 36) {
+        vol = attackTable[this.attackPhase >> 13];
         this.attackPhase += this.attackInc;
         out[offset++] = vol + level;
       }
-      if (this.attackPhase > 255) {
+      if (this.attackPhase >= 8192 * 36) {
         this.adsrMode++;
         vol = 0;
       }

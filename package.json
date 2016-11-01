@@ -1,0 +1,17 @@
+{
+  "name": "adlib",
+  "version": "1.0.0",
+  "description": "adlib thing",
+  "repository": "a1k0n/opl2",
+  "author": "Andy Sloane <andy@a1k0n.net> (http://www.a1k0n.net/)",
+  "license": "MIT",
+  "main": "index.html",
+  "window": {
+    "frame": true,
+    "toolbar": false,
+    "position": "center",
+    "resizable": true
+  },
+  "scripts": { "test": "node test/all.js" },
+  "devDependencies": { "test": ">=0.0.5" }
+}
