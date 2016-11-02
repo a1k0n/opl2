@@ -122,8 +122,8 @@ void setup() {
   ym3812_write(0x08, 0x00);  // disable CSM
   ym3812_write(0xbd, 0xc0);  // full vib/tremolo depth
   
-  ym3812_write(0x60 + op1, 0x4f);  // ad
-  ym3812_write(0x80 + op1, 0x0f);  // sr
+  ym3812_write(0x60 + op1, 0x64);  // ad
+  ym3812_write(0x80 + op1, 0x2f);  // sr
   ym3812_write(0x40 + op1, 0x00);  // ksl / output level
   ym3812_write(0x20 + op1, 0x21);  // multiplier, vibrato, sustain 0x20
   ym3812_write(0xe0 + op1, 0x02);  // waveform (half sine)
